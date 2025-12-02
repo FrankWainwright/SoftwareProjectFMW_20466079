@@ -55,17 +55,7 @@ int main()
     PrintBuffer (&buffer[0]);
     Sleep(100);
 
-    Initialisation("SingleStrokeFont.txt"); // Initialse program for font data
-    printf("Character: H (ASCII %u)\n",FontSet[72].ascii_code );
-            printf("Number of movements: %u\n", FontSet[72].num_movements);
-
-            for (unsigned int j = 0; j < FontSet[72].num_movements; j++) {
-                printf("  Movement %u: x=%u, y=%u, pen=%u\n",
-                       j,
-                       FontSet[72].movements[j].x,
-                       FontSet[72].movements[j].y,
-                       FontSet[72].movements[j].pen);
-            }
+    Initialisation("SingleStrokeFont.txt");         //Initialse program for font data
     // This is a special case - we wait  until we see a dollar ($)
     WaitForDollar();
 
@@ -79,16 +69,24 @@ int main()
     sprintf (buffer, "S0\n");
     SendCommands(buffer);
 
-    if (TextParse("test.txt", &TextInput, &TextLength)) {
+    #ifdef DEBUG        //Debug value tests
+        printf("Character: H (ASCII %u)\n",FontSet[72].ascii_code );
+        printf("Number of movements: %u\n", FontSet[72].num_movements);
+
+            for (unsigned int j = 0; j < FontSet[72].num_movements; j++) 
+            {
+                printf("  Movement %u: x=%u, y=%u, pen=%u\n",
+                       j,
+                       FontSet[72].movements[j].x,
+                       FontSet[72].movements[j].y,
+                       FontSet[72].movements[j].pen);
+            }
         printf("Read %d ASCII values:\n", TextLength);
-        for (int i = 0; i < TextLength; i++) {
+        for (int i = 0; i < TextLength; i++)
+        {
             printf("%d ", TextInput[i]);
         }
-        printf("\n");
-    } else {
-        printf("Failed to parse text file.\n");
-    }
-
+    #endif
     // These are sample commands to draw out some information - these are the ones you will be generating.
     sprintf (buffer, "G0 X-13.41849 Y0.000\n");
     SendCommands(buffer);
@@ -170,25 +168,49 @@ int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to lo
     return 1;  // return success
 }
 
-int Initialisation(const char *FileName) {
-    unsigned int FontHeight = 0;
-    while (FontHeight < 4 || FontHeight > 10 )
-    {
+int Initialisation(const char *FileName) //Function to handle all file read related operations at the start of the program and trap errors
+{
+    unsigned int FontHeight = 0;        //User specified value for the height they want letters to be written at
+    char input[32];     //Buffer for user input, ensuring it doesnt break input loop
+   for (;;)     //Run forever until correct input is given
+   {
         printf("Please input a height (in mm) between 4 and 10 for the text to be drawn at: ");
-        scanf("%u",&FontHeight);
+        if (fgets(input, sizeof(input), stdin))     //Process user input
+         {
+            if (sscanf(input, "%u", &FontHeight) == 1)  //Test if the value contains an unsigned integer
+            {
+                if (FontHeight >= 4 && FontHeight <= 10)    //Test if the integer value is within specified limits
+                {
+                    break;  //End infinite loop 
+                }
+            }
+        }
+        printf("Invalid input. Please enter a whole number between 4 and 10.\n");
     }
+
+
     
-    int Success = FontRead(FileName,FontHeight);
-    if (Success)
+    if (FontRead(FileName,FontHeight))      //Read font instructions and populate structure with it
     {
         printf("Font File Processed \n");
-        return 1;
+        
     }
     else
     {
         printf("Failed to read Font File \n");
-        return 0;
+        exit(1);
     }
+
+    if (TextParse("test.txt", &TextInput, &TextLength))     //Read text and populate array with it
+    {
+        printf("Text file processed \n"); //Confirm Sucess
+    }
+    else       
+    {
+        printf("Failed to process text file.\n"); //Confirm Error
+        exit(1);
+    }
+    return 1;
     
 }
 
