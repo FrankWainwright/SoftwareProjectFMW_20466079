@@ -9,13 +9,7 @@
   "C_Cpp_Runner.warnings": [
     "-Wall",
     "-Wextra",
-    "-Wpedantic",
-    "-Wshadow",
-    "-Wformat=2",
-    "-Wcast-align",
-    "-Wconversion",
-    "-Wsign-conversion",
-    "-Wnull-dereference"
+    "-Wpedantic"
   ],
   "C_Cpp_Runner.msvcWarnings": [
     "/W4",
@@ -55,8 +49,5 @@
   "C_Cpp_Runner.useLeakSanitizer": false,
   "C_Cpp_Runner.showCompilationTime": false,
   "C_Cpp_Runner.useLinkTimeOptimization": false,
-  "C_Cpp_Runner.msvcSecureNoWarnings": false,
-  "files.associations": {
-    "RobotInit.C": "cpp"
-  }
+  "C_Cpp_Runner.msvcSecureNoWarnings": false
 }
