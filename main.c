@@ -6,23 +6,24 @@
 #include "rs232.h"
 #include "serial.h"
 
-#define DEBUG
+//#define DEBUG
 #define bdrate 115200               /* 115200 baud */
-#define MAXMOVEMENTS 20     // upper bound for movements per character
-#define MAXCHARS     128    // ASCII range (0–127)
+#define MAXMOVEMENTS 20     //Upper bound for movements per character
+#define MAXCHARS     128    //ASCII range (0–127)
+#define MAXWIDTH 100     //Maximum writing width in mm
 
 struct Instructions     //Structure of pen movement instructions
 {   
-    int x;     // X offset from origin
-    int y;     // Y offset from origin
-    unsigned int pen;   // Pen state: 0 = up, 1 = down
+    int x;     //X position from origin
+    int y;     //Y position from origin
+    unsigned int pen;   //Pen state: 0 = up, 1 = down
 };
 
 struct FontData     //Structure of the font header with nested structure of instructions      
  {
-    unsigned int ascii_code;                        // ASCII value of the character
-    unsigned int num_movements;                     // Number of movements
-    struct Instructions movements[MAXMOVEMENTS];    // Array of movements
+    unsigned int ascii_code;                        //ASCII value of the character
+    unsigned int num_movements;                     //Number of movements
+    struct Instructions movements[MAXMOVEMENTS];    //Array of movements
 };
 struct FontData FontSet[MAXCHARS];      //Populating the structure with spaces for every ascii character
 int *TextInput = NULL;      //Array of ascii values in text file
@@ -30,11 +31,17 @@ int TextLength;         //Length of the text in the TextArray
 int NextWord[64];          //Array of ascii values comprising the next word to be translated into commands
 int WordLength;         //Length of text in file to appropriately allocate TextInput array size
 int WordPosition = 0;   //Current location of the start/end of a word
+unsigned int LineSpacing = 5;   //Spacing between successive lines in mm
+int XOffset = 0;        //Offset applied from origin in X direction
+unsigned int YOffset = 0;        //Offset applied from origin in Y direction
+
+
 void SendCommands (char *buffer );
 int FontRead(const char *fontfilename, unsigned int FontHeight);
 int Initialisation(const char *FontFile);
 int TextRead(const char *textfilename, int **AsciiArray, int *outLength);
 int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength);
+int GenerateGCode(const int *NextWord, int WordLength);
 
 int main()
 {
@@ -89,37 +96,31 @@ int main()
         {
             printf("%d ", TextInput[i]);
         }
-        while (TextParse(TextInput, TextLength, &WordPosition, NextWord, &WordLength))
-        {
-        printf("Next word (%d chars): ", WordLength);
-        for (int i = 0; i < WordLength; i++)
-        {
-            if (NextWord[i] == 10) printf("[LF]");
-            else if (NextWord[i] == 13) printf("[CR]");
-            else printf("%c", NextWord[i]);
-        }
-        printf("\n");
-        }
     #endif
-    // These are sample commands to draw out some information - these are the ones you will be generating.
-    sprintf (buffer, "G0 X-13.41849 Y0.000\n");
-    SendCommands(buffer);
-    sprintf (buffer, "S1000\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X-13.41849 Y-4.28041\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X-13.41849 Y0.0000\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X-13.41089 Y4.28041\n");
-    SendCommands(buffer);
-    sprintf (buffer, "S0\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G0 X-7.17524 Y0\n");
-    SendCommands(buffer);
-    sprintf (buffer, "S1000\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G0 X0 Y0\n");
-    SendCommands(buffer);
+    
+    while (TextParse(TextInput, TextLength, &WordPosition, NextWord, &WordLength)) 
+    {
+    
+        if (WordLength > 0)     //If TextParse returns 1 when a word or CR/LF was successfully extracted
+        {
+        
+            if (GenerateGCode(NextWord, WordLength))        //Generate G-code for this word and send commands
+            {
+            //Show debug info
+            #ifdef DEBUG
+            printf("Processed word of length %d at position %d\n", WordLength, WordPosition);
+            #endif
+            }
+            else 
+            {
+            printf("Error generating G-code for word at position %d\n", WordPosition);
+            }
+        }
+    }
+
+// After finishing all words, ensure pen is up and return to origin
+sprintf(buffer, "S0 G0 X0 Y0\n");   // Pen up, move to (0,0)
+SendCommands(buffer);
 
     // Before we exit the program we need to close the COM port
     CloseRS232Port();
@@ -132,12 +133,13 @@ int main()
 // as the dummy 'WaitForReply' has a getch() within the function.
 void SendCommands (char *buffer )
 {
-    // printf ("Buffer to send: %s", buffer); // For diagnostic purposes only, normally comment out
+   
+    //printf ("Buffer to send: %s", buffer); // For diagnostic purposes only, normally comment out
     PrintBuffer (&buffer[0]);
     WaitForReply();
     Sleep(100); // Can omit this when using the writing robot but has minimal effect
-    // getch(); // Omit this once basic testing with emulator has taken place
 }
+
 int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to load fontfile, and populate structure 
 {
     FILE *fontfile = fopen(fontfilename, "r"); //Opens specified file
@@ -162,17 +164,17 @@ int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to lo
             break;
         }
 
-        FontSet[count].ascii_code = ascii;  //Setting ascii identifier in header of structure from header of font character definition
-        FontSet[count].num_movements = n;   //Setting number of movements in header of structure from header of font character definition
+        FontSet[ascii].ascii_code = ascii;  //Setting ascii identifier in header of structure from header of font character definition
+        FontSet[ascii].num_movements = n;   //Setting number of movements in header of structure from header of font character definition
 
         for (int i = 0; i < n && i < MAXMOVEMENTS; i++) //Iterate through movements until specified movements in font header are finished or maximum limit is reached
         {
             int BeforeScaleY = 0; //Initilaise a temporary variable so Y commands can be modified by the user specified font height
             fscanf(fontfile, "%d %d %u",
-                   &FontSet[count].movements[i].x,
+                   &FontSet[ascii].movements[i].x,
                    &BeforeScaleY,
-                   &FontSet[count].movements[i].pen); //Scan file for the three variables specified in the formatting of the file and assign them to the structure at that step
-                   FontSet[count].movements[i].y = (int)(((double)BeforeScaleY / 18.0) * FontHeight + 0.5); //Modifies Y values by the specified height ensuring non integer values are rounded up
+                   &FontSet[ascii].movements[i].pen); //Scan file for the three variables specified in the formatting of the file and assign them to the structure at that step
+                   FontSet[ascii].movements[i].y = (int)(((double)BeforeScaleY / 18.0) * FontHeight + 0.5); //Modifies Y values by the specified height ensuring non integer values are rounded up
         }
 
         count++;
@@ -242,7 +244,7 @@ int Initialisation(const char *FileName) //Function to handle all file read rela
         printf("Invalid input. Please enter a whole number between 4 and 10.\n");
     }
 
-
+    LineSpacing += FontHeight;
     
     if (FontRead(FileName,FontHeight))      //Read font instructions and populate structure with it
     {
@@ -268,22 +270,34 @@ int Initialisation(const char *FileName) //Function to handle all file read rela
     
 }
 
-int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength) 
+int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength)       //Function to seperate TextArray into words that can be processed into GCode commands
 {
     if (*WordPosition >= TextLength)      //Check if end of text has been reached  
     {
         *WordLength = 0;
-        return 0;  //Return no words left
+        return 0;  //Return no word / Failure
     }
 
     int count = 0;  //Counter to track how many ascii values have been counted, therefore the word length
 
-    if (TextArray[*WordPosition] == 13 || TextArray[*WordPosition] == 10)       //Handles new line and carriage return implicitly
-    {
-        NextWord[count++] = TextArray[*WordPosition];
+    if (TextArray[*WordPosition] == 13)     //If CR is in word
+    { 
+    NextWord[count++] = 13; //Store CR
+    (*WordPosition)++;
+    if (*WordPosition < TextLength && TextArray[*WordPosition] == 10) //If LF follows
+    { 
+        NextWord[count++] = 10; //Store LF
         (*WordPosition)++;
-        *WordLength = count;
-        return 1;  //Return CR/LF as a "word" to process
+    }
+    *WordLength = count;    
+    return 1; //Return new word / Success
+    }
+    else if (TextArray[*WordPosition] == 10) //If just LF is in word
+    { 
+    NextWord[count++] = 10; //Store LF
+    (*WordPosition)++;
+    *WordLength = count;
+    return 1;   //Return new word / Success
     }
 
     while (*WordPosition < TextLength &&       //If ascii value is part of a word process it  
@@ -301,7 +315,73 @@ int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextW
     }
 
     *WordLength = count;        //Set WordLength to the amount of ascii values processed in current word
-    return 1;  //Retun success/ new word
+    return 1;  //Retun new word / Success
+}
+
+int GenerateGCode(const int *NextWord, int WordLength)
+{
+    char buffer[128];
+
+  
+    if (NextWord[0] == 13 || NextWord[0] == 10)        //Processing new line / return carriage ascii values
+    {
+        
+        XOffset = 0;                //Move X offset back to the origin (return carriage)
+        YOffset -= LineSpacing;    //Move Y down a line
+        return 1; //Return Success
+    }
+
+    
+    int WordWidth = 0;
+    for (int i = 0; i < WordLength; i++)        //Iterate across word
+    {
+        int ascii = NextWord[i];
+        if (ascii < 0 || ascii >= MAXCHARS) continue;       //Error handling invalid inputs
+        struct FontData letter = FontSet[ascii];            //Pulls structure data for the current letter and gives it a local label "letter"
+        if (letter.num_movements > 0)
+        {
+            WordWidth += letter.movements[letter.num_movements - 1].x;       //Width based on position of the last movement
+        }
+    }
+
+    
+    if (XOffset + WordWidth > MAXWIDTH)     //If word exceeds width limit
+    {
+        
+        XOffset = 0;        //Send carriage back                
+        YOffset -= LineSpacing;  // negative Y direction per spec
+    }
+
+    
+    for (int i = 0; i < WordLength; i++)        //Generate G-code for each letter in the word
+    {
+        int ascii = NextWord[i];
+        if (ascii < 0 || ascii >= MAXCHARS) continue;
+
+        struct FontData letter = FontSet[ascii];    //Pulls structure data for the current letter and gives it a local label "letter"
+
+        for (unsigned int j = 0; j < letter.num_movements; j++) {
+            struct Instructions move = letter.movements[j];
+
+            int TargetX = XOffset + move.x;
+            int TargetY = YOffset + move.y;
+
+            if (move.pen == 1)      //If pen down is specified in font
+            {
+                sprintf(buffer, "S1000 G1 X%d Y%d\n", TargetX, TargetY);        //Set spindle on and movement to steady while moving to position
+            } else {
+                sprintf(buffer, "S0 G0 X%d Y%d\n", TargetX, TargetY);           //Set spindle off and movement to rapid while moving to position
+            }
+            SendCommands(buffer);   //Send Commands
+        }
+
+        
+        if (letter.num_movements > 0)       //If there are movements
+        {
+            XOffset += letter.movements[letter.num_movements - 1].x;        //Update XOffset for next letter
+        }
+    }
+    return 1;       //Return Success
 }
 
 
