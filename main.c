@@ -31,6 +31,7 @@ int TextLength;         //Length of the text in the TextArray
 int NextWord[64];          //Array of ascii values comprising the next word to be translated into commands
 int WordLength;         //Length of text in file to appropriately allocate TextInput array size
 int WordPosition = 0;   //Current location of the start/end of a word
+unsigned int TrailingSpaces;        //How many spaces are after the current word      
 unsigned int LineSpacing = 5;   //Spacing between successive lines in mm
 int XOffset = 0;        //Offset applied from origin in X direction
 unsigned int YOffset = 0;        //Offset applied from origin in Y direction
@@ -40,8 +41,8 @@ void SendCommands (char *buffer );
 int FontRead(const char *fontfilename, unsigned int FontHeight);
 int Initialisation(const char *FontFile);
 int TextRead(const char *textfilename, int **AsciiArray, int *outLength);
-int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength);
-int GenerateGCode(const int *NextWord, int WordLength);
+int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength,unsigned int *TrailingSpaces);
+int GenerateGCode(const int *NextWord, int WordLength,unsigned int TrailingSpaces);
 
 int main()
 {
@@ -98,13 +99,13 @@ int main()
         }
     #endif
     
-    while (TextParse(TextInput, TextLength, &WordPosition, NextWord, &WordLength)) 
+    while (TextParse(TextInput, TextLength, &WordPosition, NextWord, &WordLength,&TrailingSpaces)) 
     {
     
         if (WordLength > 0)     //If TextParse returns 1 when a word or CR/LF was successfully extracted
         {
         
-            if (GenerateGCode(NextWord, WordLength))        //Generate G-code for this word and send commands
+            if (GenerateGCode(NextWord, WordLength,TrailingSpaces))        //Generate G-code for this word and send commands
             {
             //Show debug info
             #ifdef DEBUG
@@ -170,11 +171,13 @@ int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to lo
         for (int i = 0; i < n && i < MAXMOVEMENTS; i++) //Iterate through movements until specified movements in font header are finished or maximum limit is reached
         {
             int BeforeScaleY = 0; //Initilaise a temporary variable so Y commands can be modified by the user specified font height
+            int BeforeScaleX = 0; //Initilaise a temporary variable so X commands can be modified by the user specified font height
             fscanf(fontfile, "%d %d %u",
-                   &FontSet[ascii].movements[i].x,
+                   &BeforeScaleX,
                    &BeforeScaleY,
                    &FontSet[ascii].movements[i].pen); //Scan file for the three variables specified in the formatting of the file and assign them to the structure at that step
-                   FontSet[ascii].movements[i].y = (int)(((double)BeforeScaleY / 18.0) * FontHeight + 0.5); //Modifies Y values by the specified height ensuring non integer values are rounded up
+                   FontSet[ascii].movements[i].x = (int)(((double)FontHeight/ 18.0) * BeforeScaleX + 0.5);  //Modifies X values by the specified height ensuring non integer values are rounded up
+                   FontSet[ascii].movements[i].y = (int)(((double)FontHeight/ 18.0) * BeforeScaleY + 0.5);  //Modifies Y values by the specified height ensuring non integer values are rounded up
         }
 
         count++;
@@ -243,9 +246,9 @@ int Initialisation(const char *FileName) //Function to handle all file read rela
         }
         printf("Invalid input. Please enter a whole number between 4 and 10.\n");
     }
+    YOffset -= FontHeight;       //Ensure text starts below Y 0
+    LineSpacing += FontHeight;      //Set Linespacing to be the distance between lines and the height of a line
 
-    LineSpacing += FontHeight;
-    
     if (FontRead(FileName,FontHeight))      //Read font instructions and populate structure with it
     {
         printf("Font File Processed \n");
@@ -270,15 +273,17 @@ int Initialisation(const char *FileName) //Function to handle all file read rela
     
 }
 
-int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength)       //Function to seperate TextArray into words that can be processed into GCode commands
+int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength, unsigned int *TrailingSpaces)       //Function to seperate TextArray into words that can be processed into GCode commands
 {
     if (*WordPosition >= TextLength)      //Check if end of text has been reached  
     {
         *WordLength = 0;
+        *TrailingSpaces = 0;       
         return 0;  //Return no word / Failure
     }
 
     int count = 0;  //Counter to track how many ascii values have been counted, therefore the word length
+    *TrailingSpaces = 0;    //Reseting trailing spaces for each word
 
     if (TextArray[*WordPosition] == 13)     //If CR is in word
     { 
@@ -303,22 +308,32 @@ int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextW
     while (*WordPosition < TextLength &&       //If ascii value is part of a word process it  
            TextArray[*WordPosition] != 32 &&   //Space
            TextArray[*WordPosition] != 13 &&   //CR
-           TextArray[*WordPosition] != 10) {   //LF
+           TextArray[*WordPosition] != 10)     //LF
+    {   
         NextWord[count++] = TextArray[*WordPosition];       //Saving TextArray value at that point to the NextWord array
         (*WordPosition)++;
     }
+    
+    while (*WordPosition < TextLength && TextArray[*WordPosition] == 32)    //Count the spaces left after a word
+    {
+        (*TrailingSpaces)++;
+        (*WordPosition)++;
+    }
+
+
     if (*WordPosition < TextLength &&     //Skip past special characters after they have been identified earlier  
         (TextArray[*WordPosition] == 32 ||
          TextArray[*WordPosition] == 13 ||
-         TextArray[*WordPosition] == 10)) {
+         TextArray[*WordPosition] == 10)) 
+    {
         (*WordPosition)++;
     }
 
     *WordLength = count;        //Set WordLength to the amount of ascii values processed in current word
-    return 1;  //Retun new word / Success
+    return 1;  //Return new word / Success
 }
 
-int GenerateGCode(const int *NextWord, int WordLength)
+int GenerateGCode(const int *NextWord, int WordLength, unsigned int TrailingSpaces)
 {
     char buffer[128];
 
@@ -381,6 +396,8 @@ int GenerateGCode(const int *NextWord, int WordLength)
             XOffset += letter.movements[letter.num_movements - 1].x;        //Update XOffset for next letter
         }
     }
+    struct FontData Space = FontSet[32];    //Pulling the movement data of space as it has been scaled 
+    XOffset += TrailingSpaces*Space.movements[0].x;     //Increasing the offset by the spaces between words
     return 1;       //Return Success
 }
 
