@@ -5,8 +5,8 @@
 
 struct Instructions     //Structure of pen movement instructions
 {   
-    int x;     //X position from origin
-    int y;     //Y position from origin
+    double x;     //X position from origin
+    double y;     //Y position from origin
     unsigned int pen;   //Pen state: 0 = up, 1 = down
 };
 
@@ -17,8 +17,8 @@ struct FontData     //Structure of the font header with nested structure of inst
     struct Instructions movements[MAXMOVEMENTS];    //Array of movements
 };
 struct FontData FontSet[MAXCHARS];      //Populating the structure with spaces for every ascii character
-int XOffset = 0;        //Offset applied from origin in X direction
-unsigned int YOffset = 0;        //Offset applied from origin in Y direction
+double XOffset = 0;        //Offset applied from origin in X direction
+double YOffset = 0;        //Offset applied from origin in Y direction
 int *TextInput = NULL;      //Array of ascii values in text file
 int TextLength;         //Length of the text in the TextArray
 unsigned int LineSpacing = 5;   //Spacing between successive lines in mm
@@ -58,8 +58,8 @@ int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to lo
                    &BeforeScaleX,
                    &BeforeScaleY,
                    &FontSet[ascii].movements[i].pen); //Scan file for the three variables specified in the formatting of the file and assign them to the structure at that step
-                   FontSet[ascii].movements[i].x = (int)(((double)FontHeight/ 18.0) * BeforeScaleX + 0.5);  //Modifies X values by the specified height ensuring non integer values are rounded up
-                   FontSet[ascii].movements[i].y = (int)(((double)FontHeight/ 18.0) * BeforeScaleY + 0.5);  //Modifies Y values by the specified height ensuring non integer values are rounded up
+                   FontSet[ascii].movements[i].x = (((double)FontHeight/ 18.0) * BeforeScaleX);  //Modifies X values by the specified height ensuring non integer values are rounded up
+                   FontSet[ascii].movements[i].y = (((double)FontHeight/ 18.0) * BeforeScaleY);  //Modifies Y values by the specified height ensuring non integer values are rounded up
         }
 
         count++;

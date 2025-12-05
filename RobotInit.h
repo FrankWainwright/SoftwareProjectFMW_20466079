@@ -10,8 +10,8 @@
 
 struct Instructions     //Structure of pen movement instructions
 {   
-    int x;     //X position from origin
-    int y;     //Y position from origin
+    double x;     //X position from origin
+    double y;     //Y position from origin
     unsigned int pen;   //Pen state: 0 = up, 1 = down
 };
 struct FontData     //Structure of the font header with nested structure of instructions      
@@ -21,8 +21,8 @@ struct FontData     //Structure of the font header with nested structure of inst
     struct Instructions movements[MAXMOVEMENTS];    //Array of movements
 };
 extern struct FontData FontSet[MAXCHARS];  // Global font set
-extern int XOffset;                        // Offset applied from origin in X direction
-extern unsigned int YOffset;               // Offset applied from origin in Y direction
+extern double XOffset;                        // Offset applied from origin in X direction
+extern double YOffset;               // Offset applied from origin in Y direction
 extern int *TextInput;      //Array of ascii values in text file
 extern int TextLength;         //Length of the text in the TextArray
 extern unsigned int LineSpacing;   //Spacing between successive lines in mm

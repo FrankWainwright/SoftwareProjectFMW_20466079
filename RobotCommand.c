@@ -95,7 +95,7 @@ int GenerateGCode(const int *NextWord, int WordLength, unsigned int TrailingSpac
     }
 
     
-    int WordWidth = 0;
+    double WordWidth = 0;
     for (int i = 0; i < WordLength; i++)        //Iterate across word
     {
         int ascii = NextWord[i];
@@ -132,14 +132,14 @@ int GenerateGCode(const int *NextWord, int WordLength, unsigned int TrailingSpac
                 YOffset -= LineSpacing;  // negative Y direction per spec
             }
 
-            int TargetX = XOffset + move.x;     //Set X coordinate based on font instruction and continuing offset
-            int TargetY = YOffset + move.y;     //Set Y coordinate based on font instruction and continuing offset
+            double TargetX = XOffset + move.x;     //Set X coordinate based on font instruction and continuing offset
+            double TargetY = YOffset + move.y;     //Set Y coordinate based on font instruction and continuing offset
 
             if (move.pen == 1)      //If pen down is specified in font
             {
-                sprintf(buffer, "S1000 G1 X%d Y%d\n", TargetX, TargetY);        //Set spindle on and movement to steady while moving to position
+                sprintf(buffer, "S1000 G1 X%f Y%f\n", TargetX, TargetY);        //Set spindle on and movement to steady while moving to position
             } else {
-                sprintf(buffer, "S0 G0 X%d Y%d\n", TargetX, TargetY);           //Set spindle off and movement to rapid while moving to position
+                sprintf(buffer, "S0 G0 X%f Y%f\n", TargetX, TargetY);           //Set spindle off and movement to rapid while moving to position
             }
             SendCommands(buffer);   //Send Commands
         }
