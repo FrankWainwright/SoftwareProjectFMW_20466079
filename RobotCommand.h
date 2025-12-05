@@ -12,7 +12,7 @@ extern int WordPosition;   //Current location of the start/end of a word
 extern unsigned int TrailingSpaces;        //How many spaces are after the current word
 
 int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength,unsigned int *TrailingSpaces);
-int GenerateGCode(const int *NextWord, int WordLength,unsigned int TrailingSpaces);
+int GenerateGCode(int *NextWord, int WordLength,unsigned int TrailingSpaces);
 void SendCommands (char *buffer );
 
 #endif

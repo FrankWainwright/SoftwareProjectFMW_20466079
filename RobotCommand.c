@@ -41,8 +41,10 @@ int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextW
     { 
         NextWord[count++] = 10; //Store LF
         (*WordPosition)++;
+        
     }
-    *WordLength = count;    
+    *WordLength = count; 
+      
     return 1; //Return new word / Success
     }
     else if (TextArray[*WordPosition] == 10) //If just LF is in word
@@ -50,6 +52,7 @@ int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextW
     NextWord[count++] = 10; //Store LF
     (*WordPosition)++;
     *WordLength = count;
+    printf("Word is %d", *NextWord); 
     return 1;   //Return new word / Success
     }
 
@@ -68,29 +71,21 @@ int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextW
         (*WordPosition)++;
     }
 
-
-    if (*WordPosition < TextLength &&     //Skip past special characters after they have been identified earlier  
-        (TextArray[*WordPosition] == 32 ||
-         TextArray[*WordPosition] == 13 ||
-         TextArray[*WordPosition] == 10)) 
-    {
-        (*WordPosition)++;
-    }
-
     *WordLength = count;        //Set WordLength to the amount of ascii values processed in current word
     return 1;  //Return new word / Success
 }
 
-int GenerateGCode(const int *NextWord, int WordLength, unsigned int TrailingSpaces)
+int GenerateGCode( int *NextWord, int WordLength, unsigned int TrailingSpaces)
 {
     char buffer[128];
 
-  
     if (NextWord[0] == 13 || NextWord[0] == 10)        //Processing new line / return carriage ascii values
     {
         
         XOffset = 0;                //Move X offset back to the origin (return carriage)
         YOffset -= LineSpacing;    //Move Y down a line
+        sprintf(buffer, "S0 G0 X%f Y%f\n", XOffset, YOffset);
+        SendCommands(buffer);
         return 1; //Return Success
     }
 
