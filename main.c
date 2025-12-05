@@ -39,7 +39,7 @@ unsigned int YOffset = 0;        //Offset applied from origin in Y direction
 
 void SendCommands (char *buffer );
 int FontRead(const char *fontfilename, unsigned int FontHeight);
-int Initialisation(const char *FontFile);
+int Initialisation(const char *FontFileName, const char *TextFileName);
 int TextRead(const char *textfilename, int **AsciiArray, int *outLength);
 int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength,unsigned int *TrailingSpaces);
 int GenerateGCode(const int *NextWord, int WordLength,unsigned int TrailingSpaces);
@@ -66,7 +66,7 @@ int main()
     PrintBuffer (&buffer[0]);
     Sleep(100);
 
-    Initialisation("SingleStrokeFont.txt");         //Initialse program for font data
+    Initialisation("SingleStrokeFont.txt", "Test.txt");         //Initialse program for font data
     // This is a special case - we wait  until we see a dollar ($)
     WaitForDollar();
 
@@ -126,7 +126,8 @@ SendCommands(buffer);
     // Before we exit the program we need to close the COM port
     CloseRS232Port();
     printf("Com port now closed\n");
-
+    free(TextInput);        //Free up allocated memory
+    TextInput = NULL;       //Remove pointer address
     return (0);
 }
 
@@ -186,9 +187,9 @@ int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to lo
     fclose(fontfile);
     return 1;  // return success
 }
-int TextRead(const char *textfilename, int **AsciiArray, int *TextLength)       //Function to read ascii values from .txt, put them in an array and format the array for ease of use
+int TextRead(const char *TextFileName, int **AsciiArray, int *TextLength)       //Function to read ascii values from .txt, put them in an array and format the array for ease of use
 {
-    FILE *TextFile = fopen(textfilename, "r");
+    FILE *TextFile = fopen(TextFileName, "r");      //Open text file
     if (!TextFile) {
         return 0;   //Return failure
     }
@@ -227,7 +228,7 @@ int TextRead(const char *textfilename, int **AsciiArray, int *TextLength)       
     *TextLength = count;
     return 1;   //Return success
 }
-int Initialisation(const char *FileName) //Function to handle all file read related operations at the start of the program and trap errors
+int Initialisation(const char *FontFileName, const char *TextFileName) //Function to handle all file read related operations at the start of the program and trap errors
 {
     unsigned int FontHeight = 0;        //User specified value for the height they want letters to be written at
     char input[32];     //Buffer for user input, ensuring it doesnt break input loop
@@ -249,7 +250,7 @@ int Initialisation(const char *FileName) //Function to handle all file read rela
     YOffset -= FontHeight;       //Ensure text starts below Y 0
     LineSpacing += FontHeight;      //Set Linespacing to be the distance between lines and the height of a line
 
-    if (FontRead(FileName,FontHeight))      //Read font instructions and populate structure with it
+    if (FontRead(FontFileName,FontHeight))      //Read font instructions and populate structure with it
     {
         printf("Font File Processed \n");
         
@@ -260,7 +261,7 @@ int Initialisation(const char *FileName) //Function to handle all file read rela
         exit(1);
     }
 
-    if (TextRead("test.txt", &TextInput, &TextLength))     //Read text and populate array with it
+    if (TextRead(TextFileName, &TextInput, &TextLength))     //Read text and populate array with it
     {
         printf("Text file processed \n"); //Confirm Sucess
     }
@@ -371,15 +372,21 @@ int GenerateGCode(const int *NextWord, int WordLength, unsigned int TrailingSpac
     for (int i = 0; i < WordLength; i++)        //Generate G-code for each letter in the word
     {
         int ascii = NextWord[i];
-        if (ascii < 0 || ascii >= MAXCHARS) continue;
+        if (ascii < 0 || ascii >= MAXCHARS) continue;       //Error handling invalid inputs
 
         struct FontData letter = FontSet[ascii];    //Pulls structure data for the current letter and gives it a local label "letter"
 
-        for (unsigned int j = 0; j < letter.num_movements; j++) {
+        for (unsigned int j = 0; j < letter.num_movements; j++)     //Iterate through each movement for the ascii value
+        {
             struct Instructions move = letter.movements[j];
+            if ((XOffset + move.x)>= MAXWIDTH)
+            {
+                XOffset = 0;        //Send carriage back                
+                YOffset -= LineSpacing;  // negative Y direction per spec
+            }
 
-            int TargetX = XOffset + move.x;
-            int TargetY = YOffset + move.y;
+            int TargetX = XOffset + move.x;     //Set X coordinate based on font instruction and continuing offset
+            int TargetY = YOffset + move.y;     //Set Y coordinate based on font instruction and continuing offset
 
             if (move.pen == 1)      //If pen down is specified in font
             {
